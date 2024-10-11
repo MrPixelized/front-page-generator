@@ -2,6 +2,7 @@ import json
 import requests
 import feedparser
 import dateutil
+import subprocess
 from dateutil.parser import isoparse
 from datetime import datetime, timedelta, date
 from bs4 import BeautifulSoup
@@ -20,12 +21,30 @@ def filter_dict_keys(d: dict, condition: Callable):
     return {k: v for k, v in d.items() if condition(k)}
 
 
+def json_from_url(url, **params):
+    req = requests.PreparedRequest()
+    req.prepare_url(url, params)
+
+    return json.loads(requests.get(req.url).content)
+
+
+def json_from_subprocess(prog, *args, **kwargs):
+    named_args = [f"-{'-' if len(k) > 1 else ''}{k.replace('_', '-')}={v}"
+                  for k, v in kwargs.items()]
+    proc = subprocess.run([prog, *args, *named_args], stdout=subprocess.PIPE)
+
+    return json.loads(proc.stdout)
+
+
 @dataclass
 class Article:
     title: str
     summary: str
     url: str
     timestamp: datetime
+
+    def __str__(self):
+        return f"{self.title}\n{self.timestamp}\n" + self.summary
 
     def __post_init__(self):
         self.summary = parse_html(self.summary)
@@ -74,7 +93,7 @@ class Location:
 @dataclass(kw_only=True)
 class BaseWeatherDatum:
     location: Location
-    timestamp: datetime
+    timestamp: datetime | date
     wmo_code: int
     statement: dict = field(default_factory=dict)
 
@@ -90,9 +109,10 @@ class BaseWeatherDatum:
         English-language statement about them """
 
         daytime = "day"
-        if hasattr(self, "sunrise") and hasattr(self, "sunset"):
-            if self.timestamp < self.sunrise or self.timestamp > self.sunset:
-                daytime = "night"
+        if type(self.timestamp) is datetime:
+            if hasattr(self, "sunrise") and hasattr(self, "sunset"):
+                if self.timestamp < self.sunrise or self.timestamp > self.sunset:
+                    daytime = "night"
 
         self.statement = {}
         self.statement["wmo"] = wmo_codes[self.wmo_code][daytime]
@@ -108,6 +128,12 @@ class BaseWeatherDatum:
         elif self.temperature > 5:
             self.statement["temperature"] = "cold"
 
+    def __str__(self):
+        return (
+            f"{self.location} @ {self.timestamp}: " +
+            f"{self.statement['wmo']['description']}, " +
+            f"{self.statement['temperature']} temperatures"
+        )
 
 @dataclass
 class DailyWeatherDatum(BaseWeatherDatum):
@@ -128,7 +154,7 @@ class DailyWeatherDatum(BaseWeatherDatum):
                 data[k.replace("_2m", "")] = data.pop(k)
 
         data["wmo_code"] = data.pop("weather_code")
-        data["timestamp"] = isoparse(data.pop("time"))
+        data["timestamp"] = isoparse(data.pop("time")).date()
         data["uv_index"] = data.pop("uv_index_max")
         data["precipitation_probability"] = data.pop("precipitation_probability_max")
         data["sunrise"] = isoparse(data["sunrise"])
@@ -190,6 +216,9 @@ class WeatherForecast:
         "precipitation_probability_max",
     ]
 
+    def __str__(self):
+        return "\n".join(map(str, self.daily.values()))
+
     def __post_init__(self):
         self.refresh()
 
@@ -210,13 +239,54 @@ class WeatherForecast:
                  for d in transpose_dict_lists(data["daily"])]
 
         self.hourly = {datum.timestamp: datum for datum in hourly}
-        self.daily = {datum.timestamp.date(): datum for datum in daily}
+        self.daily = {datum.timestamp: datum for datum in daily}
         self.by_date = {date:
             DailyAggregateAndHourlyWeather(
                 aggregate=self.daily[date],
                 hourly=filter_dict_keys(self.hourly, lambda k: k.date() == date)
             )
             for date in self.daily.keys()}
+
+
+@dataclass
+class BalanceSheet:
+    liabilities: Dict
+    assets: Dict
+
+    def __post_init__(self):
+        pass
+        #  if self.assets_total is None:
+            #  self.assets_total = sum(self.assets.values())
+        #  if self.liabilities_total is None:
+            #  self.liabilities_total = sum(self.liabilities.values())
+        #  if self.net is None:
+            #  self.net = self.assets_total - self.liabilities_total
+
+    @classmethod
+    def from_hledger(cls, *args, **kwargs):
+        data = json_from_subprocess("hledger", "bs", output_format="json", *args, **kwargs)
+
+        data = {k: v[0] for [k, *v] in data["cbrSubreports"]}
+
+        assets = {row["prrName"]: [
+            str(total["aquantity"]["floatingPoint"]) + " " + total["acommodity"]
+            for total in row["prrTotal"]
+        ] for row in data["Assets"]["prRows"]}
+
+        liabilities = {row["prrName"]: [
+            str(total["aquantity"]["floatingPoint"]) + " " + total["acommodity"]
+            for total in row["prrTotal"]
+        ] for row in data["Liabilities"]["prRows"]}
+
+        self = cls(
+            liabilities=liabilities,
+            assets=assets,
+        )
+
+        return self
+    
+    def __str__(self):
+        return json.dumps(asdictify(self))
 
 
 def parse_html(html):
@@ -244,13 +314,6 @@ def transpose_dict_lists(d: Dict[K, List[T]]) -> List[Dict[K, T]]:
         l.append({k: d[k].pop(0) for k in d if d[k]})
 
     return l
-
-
-def json_from_url(url, **params):
-    req = requests.PreparedRequest()
-    req.prepare_url(url, params)
-
-    return json.loads(requests.get(req.url).content)
 
 
 def fetch_rss_articles(url: str) -> List[Article]:
@@ -314,16 +377,29 @@ class FrontPage:
             str(location): WeatherForecast(location, self.forecast_days) for location in self.locations
         }
         self.news = sum(map(list, zip(*map(fetch_articles, self.feeds))), [])
+        self.balance_sheet = BalanceSheet.from_hledger(X="EUR")
+
+    def to_md(self):
+        return (
+            "= WEATHER\n" +
+            "\n".join(map(str, self.weather.values())) +
+            "\n\n" +
+            "= NEWS\n" +
+            "\n\n".join("== " + str(article) for article in self.news[:6])
+        )
 
     def to_json(self):
         return json.dumps(seriablize(asdictify({
             "timestamp": self.refresh_time,
             "weather": {str(k): v for k, v in self.weather.items()},
             "news": self.news,
+            "balance_sheet": self.balance_sheet
        })))
 
 
 def main(**args):
+    #  BalanceSheet.from_hledger(X="EUR", depth=2)
+    #  print(FrontPage(**args).to_md())
     print(FrontPage(**args).to_json())
 
 

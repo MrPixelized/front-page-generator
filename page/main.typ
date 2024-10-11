@@ -1,6 +1,7 @@
 #import "@preview/cetz:0.2.2": canvas, draw, plot
 #import "weather-rendering.typ": weather-display
 #import "dates.typ": parse-date
+#import "util.typ": *
 
 // Styling
 #show heading.where(level: 1): it => {
@@ -32,11 +33,20 @@
   = Email
 ][
   = Finance
+  #for (account, values) in data.balance_sheet.assets.pairs() {
+    let account = account.split(":").slice(1)
+    stack(dir: ltr)[
+      #capitalize(account.first())
+      #if account.len() > 1 [
+        (#account.slice(1).join(" "))
+      ]
+    ][#h(1fr)][
+      #stack(dir: ttb, ..values, spacing: 4pt)
+    ]
+  }
 ][
   = MOTD
 ]
-
-#v(1fr)
 
 #grid(columns: (3fr, 1fr))[
   = News
@@ -77,13 +87,10 @@
 ]
 
 = Weather
-#let here = data.weather.keys().first()
-#let now = data.weather.at(here).by_date.keys().first()
-// #let weather-today-here = data.weather.at(here).by_date.remove(now)
+#weather-display(data.weather.values().first().by_date.values().first())
 
-#weather-display(data.weather.at(here), graph: true)
-// #if data.weather.at(here).weather.aggregate.len() > 0 {
-  // for data in data.weather.values() {
-    // weather-display(data.weather, location: data.location, graph: false, icon: false)
-  // }
-// }
+#if data.weather.len() > 1 or data.weather.values().first().by_date.len() > 1 {
+  grid(columns: data.weather.len(), ..data.weather.values().map(data => {
+    weather-display(data, graph: false, icon: false)
+  }))
+}
