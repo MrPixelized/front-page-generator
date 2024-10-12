@@ -1,6 +1,8 @@
 #import "@preview/cetz:0.2.2": canvas, draw, plot
 #import "./dates.typ": *
 
+#let capitalize(s) = upper(s.slice(0, 1)) + s.slice(1)
+
 #let hatching(color: gray.lighten(50%)) = {
   let fg = color.darken(20%)
   let bg = white
@@ -69,12 +71,12 @@
   icon: none,
   precipitation-probability: none, uv-index: none,
   ..args
-) = block(..args, {
-  let icon-padding = 8pt
-  let spacing-factor = 8pt
+) = layout(size => block(..args, {
+  let spacing-factor = 6pt
+  let icon-size = calc.min(2cm, size.width / 2)
 
   // Date, location, statement
-  block({
+  box({
     if date != none {
       box(heading(level: 2, smallcaps(display-day(date))))
     }
@@ -86,29 +88,24 @@
       // text(8pt)[#city, #country]
       text(8pt, city)
     }
-
-    v(spacing-factor, weak: true)
-
-    text(statement)
   })
 
-  // Icon
-  // #v(icon-padding, weak: true)
+  v(spacing-factor, weak: true)
+  text(statement)
 
+  // Icon
+  v(icon-size/8, weak: true)
   if icon != none {
-    grid(columns: 2, column-gutter: 1fr, align: bottom, rows: 2cm,
-      pad(left: icon-padding, icon),
+    grid(columns: (1fr, auto), align: bottom,
+      align(center, box(width: icon-size, icon)),
       hi-lo(hi: hi, lo: lo),
     )
   } else {
     pad(x: 1em, hi-lo(hi: hi, lo: lo, direction: rtl))
   }
 
-  v(0.5em)
-
   // Sliders
   set text(8pt)
-
   if precipitation-probability != none {
     strong(smallcaps[Chances of rain])
     v(spacing-factor, weak: true)
@@ -120,7 +117,7 @@
     v(spacing-factor, weak: true)
     slider(uv-index)
   }
-})
+}))
 
 #let plot-clean(..args) = {
   draw.set-style(axes: (stroke: none, tick: (stroke: none)))
@@ -135,6 +132,8 @@
 }
 
 #let forecast-graph(data, sunrise: none, sunset: none) = {
+  let graph-size = (1, 0.275)
+  let icon-width = 28pt
   let sunrise = parse-date(data.aggregate.sunrise)
   let sunset = parse-date(data.aggregate.sunset)
 
@@ -148,11 +147,12 @@
   let tick-timestamps = timestamps.slice(1, -1).chunks(2).map(l => l.at(0))
   let ticks = tick-timestamps.map(t => (parse-date(t).hour(), {
     set text(8pt)
-    grid(
-      columns: 1,
-      align: center + horizon,
-      weather-icon(data.hourly.at(t).statement.wmo.owm_image_description, width: 1cm),
-      parse-date(t).display("[hour]:[minute]"),
+    set align(center)
+    stack(dir: ttb,
+      box(width: icon-width,
+        weather-icon(data.hourly.at(t).statement.wmo.owm_image_description)),
+      box(width: icon-width,
+        parse-date(t).display("[hour]:[minute]")),
     )
   }))
 
@@ -162,115 +162,125 @@
   let min-temp = calc.min(..timestamps.map(t => data.hourly.at(t).temperature))
   let max-temp = calc.max(..timestamps.map(t => data.hourly.at(t).temperature))
 
-  canvas(length: 100%, {
-    // Astronomy
-    plot-clean(size: (1, 0.3), y-min: 0, y-max: 1, name: "astro", {
-      let sunrise = sunrise.hour() + sunrise.minute() / 60
-      let sunset = sunset.hour() + sunset.minute() / 60
+  box(width: 100%, {
+    canvas(length: 100%, {
+      // Astronomy
+      plot-clean(size: graph-size, y-min: 0, y-max: 1, name: "astro", {
+        let sunrise = sunrise.hour() + sunrise.minute() / 60
+        let sunset = sunset.hour() + sunset.minute() / 60
 
-      let noon = (sunset + sunrise) / 2
+        let noon = (sunset + sunrise) / 2
 
-      plot.add(
-        style: (stroke: 0pt),
-        (
-          (calc.min(..timestamps.map(parse-date).map(t => t.hour())), 0),
-          (calc.max(..timestamps.map(parse-date).map(t => t.hour())), 0),
+        plot.add(
+          style: (stroke: 0pt),
+          (
+            (calc.min(..timestamps.map(parse-date).map(t => t.hour())), 0),
+            (calc.max(..timestamps.map(parse-date).map(t => t.hour())), 0),
+          )
         )
-      )
 
-      plot.add-anchor("sunrise", (sunrise, 0))
-      plot.add-anchor("sunset", (sunset, 0))
-      plot.add-anchor("noon", (noon, (sunset - sunrise) / 24))
-      plot.add-anchor("now-bottom", (10, 0))
-      plot.add-anchor("now-top", (10, 1))
-    })
+        plot.add-anchor("sunrise", (sunrise, 0))
+        plot.add-anchor("sunset", (sunset, 0))
+        plot.add-anchor("noon", (noon, (sunset - sunrise) / 22))
+        plot.add-anchor("now-bottom", (10, 0))
+        plot.add-anchor("now-top", (10, 1))
+      })
 
-    draw.intersections("sun", {
-      draw.hobby("astro.sunrise", "astro.noon", "astro.sunset",
-        stroke: gray.lighten(33%),
-        // stroke: gradient.linear(red.darken(20%), orange, yellow, ..(blue.lighten(70%),)*4, dir: btt),
-      )
-      draw.hide(draw.line("astro.now-bottom", "astro.now-top", name: "now"))
-    })
-
-    for (t, anchor) in ((sunrise, "astro.sunrise"), (sunset, "astro.sunset")) {
-      draw.content(anchor, {
-        set text(6pt, gray.darken(33%))
-        v(2pt)
-        t.display("[hour]:[minute]")
-      }, anchor: "north")
-    }
-
-    // Precipitation
-    plot-clean(size: (1, 0.2), y-min: 0, y-max: 100, {
-      let precipitation-style = (
-        stroke: blue.lighten(50%),
-        fill: blue.transparentize(85%),
-        // fill: hatching(),
-      )
-
-      plot.add(
-        line: "hvh",
-        hypograph: true,
-        style: precipitation-style,
-        timestamps.map(t =>
-          (parse-date(t).hour(), data.hourly.at(t).precipitation_probability)
+      draw.intersections("sun", {
+        draw.hobby("astro.sunrise", "astro.noon", "astro.sunset",
+          stroke: gray.lighten(33%),
+          // stroke: gradient.linear(red.darken(20%), orange, yellow, ..(blue.lighten(70%),)*4, dir: btt),
         )
-      )
+        draw.hide(draw.line("astro.now-bottom", "astro.now-top", name: "now"))
+      })
 
-    })
-
-    draw.content("sun.0", weather-icon("clear-sky-day", width: 1cm))
-
-    // Temperature
-    plot-clean(size: (1, 0.3), x-ticks: ticks, y-min: min-temp - 1, y-max: max-temp + 1,
-      name: "temp", {
-      let temperature-style = (
-        stroke: orange.mix(yellow).lighten(50%),
-        fill: yellow.transparentize(75%),
-      )
-
-      plot.add(
-        line: "spline",
-        style: temperature-style,
-        timestamps.map(t => (parse-date(t).hour(), data.hourly.at(t).temperature))
-      )
-
-      for t in timestamps {
-        plot.add-anchor(t, (parse-date(t).hour(), data.hourly.at(t).temperature))
+      for (t, anchor) in ((sunrise, "astro.sunrise"), (sunset, "astro.sunset")) {
+        draw.content(anchor, {
+          set text(6pt, gray.darken(33%))
+          v(2pt)
+          t.display("[hour]:[minute]")
+        }, anchor: "north")
       }
-    })
 
-    for t in tick-timestamps {
-      draw.content((rel: (0, 0.02), to: "temp." + t),
-        text(8pt, gray, str(data.hourly.at(t).temperature))
-      )
-    }
+      // Precipitation
+      plot-clean(size: graph-size, y-min: 0, y-max: 120, {
+        let precipitation-style = (
+          stroke: blue.lighten(50%),
+          fill: blue.transparentize(85%),
+          // fill: hatching(),
+        )
+
+        plot.add(
+          line: "hvh",
+          hypograph: true,
+          style: precipitation-style,
+          timestamps.map(t =>
+            (parse-date(t).hour(), data.hourly.at(t).precipitation_probability)
+          )
+        )
+
+      })
+
+      // Temperature
+      plot-clean(size: graph-size, x-ticks: ticks, y-min: min-temp - 1, y-max: max-temp + 1,
+        name: "temp", {
+        let temperature-style = (
+          stroke: orange.mix(yellow).lighten(50%),
+          fill: yellow.transparentize(75%),
+        )
+
+        plot.add(
+          line: "spline",
+          style: temperature-style,
+          timestamps.map(t => (parse-date(t).hour(), data.hourly.at(t).temperature))
+        )
+
+        for t in timestamps {
+          plot.add-anchor(t, (parse-date(t).hour(), data.hourly.at(t).temperature))
+        }
+      })
+
+      for t in tick-timestamps {
+        draw.content((rel: (0, 0.02), to: "temp." + t),
+          text(8pt, gray, str(data.hourly.at(t).temperature))
+        )
+      }
+
+      // Decorative sun, on top
+      draw.content("sun.0", weather-icon("clear-sky-day", width: icon-width))
+    })
   })
 }
 
 #let weather-display(weather, icon: true, graph: true) = {
-  // [#weather]
   set grid.vline(stroke: 0.5pt)
   set grid(column-gutter: 0pt)
 
   // Iterate over each day, and for each day, generate a card, vertical line,
   // and graph
+  if "by_date" not in weather {
+    weather = (by_date: (weather.aggregate.timestamp: weather))
+  }
+
   let cards-and-graphs = weather.by_date.pairs().map(((date, data)) => (
     weather-card(
       date: parse-date(date),
-      location: weather.location,
+      location: data.aggregate.location,
       statement: [
-        #data.aggregate.statement.wmo.description,
+        #capitalize(data.aggregate.statement.wmo.description),
         #data.aggregate.statement.temperature temps
       ],
-      icon: weather-icon(data.aggregate.statement.wmo.owm_image_description),
+      icon: if icon {
+        weather-icon(data.aggregate.statement.wmo.owm_image_description)
+      },
       hi: data.aggregate.temperature_max,
       lo: data.aggregate.temperature_min,
       precipitation-probability: data.aggregate.precipitation_probability * 1%,
-      uv-index: calc.min(data.aggregate.uv_index / 8, 1) * 100%,
+      uv-index: if icon {
+        calc.min(data.aggregate.uv_index / 8, 1) * 100%
+      },
     ),
-    grid.vline(),
+    // grid.vline(),
     forecast-graph(data)
   ))
 
@@ -280,7 +290,7 @@
   )
 
   if graph {
-    grid(columns: (0.25fr, 0.75fr), align: bottom, row-gutter: 2em,
+    grid(columns: (1fr, 3fr), align: (top, bottom), row-gutter: 2em,
     inset: inset,
       ..cards-and-graphs.flatten(),
     )
