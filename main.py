@@ -1,8 +1,10 @@
 import json
+import csv
 import requests
 import feedparser
 import dateutil
 import subprocess
+from io import StringIO
 from dateutil.parser import isoparse
 from datetime import datetime, timedelta, date
 from bs4 import BeautifulSoup
@@ -28,12 +30,12 @@ def json_from_url(url, **params):
     return json.loads(requests.get(req.url).content)
 
 
-def json_from_subprocess(prog, *args, **kwargs):
+def csv_from_subprocess(prog, *args, **kwargs):
     named_args = [f"-{'-' if len(k) > 1 else ''}{k.replace('_', '-')}={v}"
                   for k, v in kwargs.items()]
     proc = subprocess.run([prog, *args, *named_args], stdout=subprocess.PIPE)
 
-    return json.loads(proc.stdout)
+    return list(csv.reader(StringIO(proc.stdout.decode("UTF-8"))))
 
 
 @dataclass
@@ -252,39 +254,34 @@ class WeatherForecast:
 class BalanceSheet:
     liabilities: Dict
     assets: Dict
-
-    def __post_init__(self):
-        pass
-        #  if self.assets_total is None:
-            #  self.assets_total = sum(self.assets.values())
-        #  if self.liabilities_total is None:
-            #  self.liabilities_total = sum(self.liabilities.values())
-        #  if self.net is None:
-            #  self.net = self.assets_total - self.liabilities_total
+    net: str
 
     @classmethod
     def from_hledger(cls, *args, **kwargs):
-        data = json_from_subprocess("hledger", "bs", output_format="json", *args, **kwargs)
+        data = csv_from_subprocess("hledger", "bs", output_format="csv", *args, **kwargs)
 
-        data = {k: v[0] for [k, *v] in data["cbrSubreports"]}
+        f = {}
+        current = {}
 
-        assets = {row["prrName"]: [
-            str(total["aquantity"]["floatingPoint"]) + " " + total["acommodity"]
-            for total in row["prrTotal"]
-        ] for row in data["Assets"]["prRows"]}
+        for row in data:
+            identifier = row[0].strip(":").lower()
 
-        liabilities = {row["prrName"]: [
-            str(total["aquantity"]["floatingPoint"]) + " " + total["acommodity"]
-            for total in row["prrTotal"]
-        ] for row in data["Liabilities"]["prRows"]}
+            if identifier in ["assets", "liabilities", "net", "account"]:
+                current = dict()
+                f[row[0].strip(":").lower()] = current
+                row[0] = "total"
 
-        self = cls(
-            liabilities=liabilities,
-            assets=assets,
+            if not row[1]:
+                continue
+
+            current[row[0]] = row[1].split(", ")
+        
+        return cls(
+            liabilities=f["liabilities"],
+            assets=f["assets"],
+            net=f["net"],
         )
 
-        return self
-    
     def __str__(self):
         return json.dumps(asdictify(self))
 
@@ -361,13 +358,15 @@ def seriablize(d) -> dict:
 
 
 class FrontPage:
-    def __init__(self, locations=None, rss_feeds=[], forecast_days=1):
+    def __init__(self, locations=None, rss_feeds=[], forecast_days=1,
+                 hledger_args=[]):
         if locations is None:
             locations = [None]
 
         self.locations = list(map(Location.fetch, locations))
         self.feeds = rss_feeds
         self.forecast_days = forecast_days
+        self.hledger_args = hledger_args
 
         self.refresh()
 
@@ -377,7 +376,7 @@ class FrontPage:
             str(location): WeatherForecast(location, self.forecast_days) for location in self.locations
         }
         self.news = sum(map(list, zip(*map(fetch_articles, self.feeds))), [])
-        self.balance_sheet = BalanceSheet.from_hledger(X="EUR")
+        self.balance_sheet = BalanceSheet.from_hledger(*self.hledger_args)
 
     def to_md(self):
         return (
@@ -398,9 +397,18 @@ class FrontPage:
 
 
 def main(**args):
-    #  BalanceSheet.from_hledger(X="EUR", depth=2)
     #  print(FrontPage(**args).to_md())
     print(FrontPage(**args).to_json())
+
+
+def dashify_arg(a):
+    if "=" not in a:
+        return a
+
+    if len(a.split("=")[0]) == 1:
+        return f"-{a}"
+
+    return f"--{a}"
 
 
 if __name__ == "__main__":
@@ -412,7 +420,9 @@ if __name__ == "__main__":
     parser.add_argument("-l", "--locations", type=str, action="extend", nargs="*", default=None)
     parser.add_argument("-f", "--forecast-days", type=int, default=1)
     parser.add_argument("-r", "--rss-feeds", type=str, action="extend", nargs="*", default=[])
+    parser.add_argument("-H", "--hledger-arg", dest="hledger_args", type=str, action="extend", nargs="*", default=[])
 
     args = parser.parse_args()
+    args.hledger_args = [dashify_arg(arg) for arg in args.hledger_args]
 
     main(*args._get_args(), **dict(args._get_kwargs()))
