@@ -8,8 +8,11 @@
   "USD": sym.dollar,
 ).at(name)
 
+#let censor(c) = context box(rect(height: measure(c).height, width:
+measure(c).width, inset: 0em, outset: (bottom: 1pt), fill: black.lighten(20%)))
+
 #let account-summary(data) = for (account, values) in data.pairs() {
-  values = values.map(v => [
+  values = values.map(v => censor[
     #currency-sign(v.split().last())#v.split().first()
   ])
 
@@ -21,7 +24,7 @@
     account = [
       #capitalize(account.first())
       #if account.len() > 1 [
-        (#(account.slice(1).join(" ")))
+        (#(censor(account.slice(1).join(" "))))
       ]
     ]
   }
