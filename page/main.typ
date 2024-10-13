@@ -12,33 +12,57 @@
   height: measure(c).height, width: measure(c).width,
   inset: 0em, outset: (bottom: 1pt), fill: black.lighten(20%)
 ))
-#let censor(c) = c
+// #let censor(c) = c
 
-#let account-summary(data) = for (account, values) in data.pairs() {
-  values = values.map(v => censor[
-    #currency-sign(v.split().last())#v.split().first()
-  ])
-
-  if account == "total" {
-    account = strong[#h(0.5em)#sym.arrow.r.curve]
-    values = values.map(strong)
-  } else {
-    account = account.split(":").slice(1)
-    account = [
-      #capitalize(account.first())
-      #if account.len() > 1 [
-        (#(censor(account.slice(1).join(" "))))
-      ]
-    ]
+#let base-finance-summary(data) = {
+  // Make sure total is at the end
+  if "total" in data {
+    data.insert("total", data.remove("total"))
   }
 
-  stack(dir: ltr)[
-    #account
-  ][#h(1fr)][
-    #stack(dir: ttb, ..values, spacing: 4pt)
-  ]
+  for (account, values) in data.pairs() {
+    if account == "total" {
+      account = strong[#h(0.5em)#sym.arrow.r.curve]
+      values = values.map(strong)
+    } else {
+      account = account.split(":").slice(1)
+      account = [
+        #capitalize(account.first())
+        #if account.len() > 1 [
+          (#(censor(account.slice(1).join(" "))))
+        ]
+      ]
+    }
 
-  v(0.65em, weak: true)
+    stack(dir: ltr)[
+      #account
+    ][#h(1fr)][
+      #stack(dir: ttb, ..values, spacing: 4pt)
+    ]
+
+    v(0.65em, weak: true)
+  }
+}
+
+#let currency-amount(a) = a.map(v => censor[
+  #currency-sign(v.split().last())#v.split().first()
+])
+
+#let budget-summary(data) = {
+  for (account, values) in data.pairs() {
+    values = values.used.zip(values.total).map(currency-amount).map(v =>
+    v.join("/"))
+    data.insert(account, values)
+  }
+  let _ = data.remove("total")
+  base-finance-summary(data)
+}
+
+#let account-summary(data) = {
+  for (account, values) in data.pairs() {
+    data.insert(account, currency-amount(values.first()))
+  }
+  base-finance-summary(data)
 }
 
 // Styling
@@ -103,7 +127,7 @@
 
 #let news = [
   = News
-  #let article-count = 12
+  #let article-count = 9
   #let cols = 3
   #let news = data.news.chunks(article-count).first()
   #let news = news.map(article => {
@@ -111,41 +135,50 @@
       article.summary.split("\n").chunks(1).first().join(" ")
   })
 
-  #block(clip: true, inset: (bottom: -1em), outset: (bottom: -0.8em),
-    columns(cols, news.join({v(1em);v(1fr, weak: true)}))
+  #block(clip: true, inset: (bottom: 0.2em),
+    // columns(cols, news.join({v(1em);v(1fr, weak: true)}))
 
-    // grid(columns: cols,
-      // ..news.chunks(int(article-count/cols)).map(c => c.join(v(1em, weak: true)))
-    // )
+    grid(columns: cols,
+      ..news.chunks(int(article-count/cols)).map(c => c.join(v(1em, weak: true)))
+    )
   )
 ]
 
 #let finance = [
   = Finance
+  #if data.finance.budget_sheet.budgets.len() > 1 [
+    == Budgets
+    #budget-summary(data.finance.budget_sheet.budgets)
+    #v(0.5em)
+  ]
+
   == Assets
-  #account-summary(data.balance_sheet.assets)
+  #account-summary(data.finance.balance_sheet.assets)
 
-  #v(0.5em)
-  == Liabilities
-  #account-summary(data.balance_sheet.liabilities)
+  #if data.finance.balance_sheet.liabilities.len() > 1 [
+    #v(0.5em)
+    == Liabilities
+    #account-summary(data.finance.balance_sheet.liabilities)
 
-  #v(0.5em)
-  == Net
-  #account-summary(data.balance_sheet.net)
+    #v(0.5em)
+    == Net
+    #account-summary(data.finance.balance_sheet.net)
+  ]
 ]
 
 #let todo = [
-  = To-do's
+  = To-dos
   #for event in data.todo {
     let due = parse-date(event.due)
 
     rect(radius: 0.5em, stroke: 0pt, fill: blue.lighten(80%), width: 100%)[
-      #event.title
-      #h(1fr)
-      // #sym.dot.c
       #if due != none [
         #due.display("[hour]:[minute]")
       ]
+      #event.title
+      #h(1fr)
+      #box(rect(radius: 1pt, inset: 2.5pt, outset: 0em, stroke: 0.5pt, fill:
+      white)[]) 
     ]
     v(0.5em, weak: true)
   }
