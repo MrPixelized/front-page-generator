@@ -4,6 +4,7 @@ from finance import BalanceSheet
 from location import Location
 from news import fetch_articles
 from events import fetch_calendar_events
+from todo import fetch_todo
 import json
 from argparse import ArgumentParser
 
@@ -29,6 +30,7 @@ class FrontPage:
         self.news = sum(map(list, zip(*map(fetch_articles, self.feeds))), [])
         self.balance_sheet = BalanceSheet.from_hledger(*self.hledger_args)
         self.events = fetch_calendar_events()
+        self.todo = fetch_todo()
 
     def to_md(self):
         return (
@@ -49,12 +51,13 @@ class FrontPage:
             "news": self.news,
             "balance_sheet": self.balance_sheet,
             "events": self.events,
+            "todo": self.todo,
        })
 
 
 def main(**args):
-    #  print(FrontPage(**args).to_md())
     print(FrontPage(**args).to_json())
+    #  FrontPage(**args).to_json()
 
 
 if __name__ == "__main__":
