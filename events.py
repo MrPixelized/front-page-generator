@@ -1,14 +1,25 @@
 from util import *
+from icalendar import Calendar
 from dataclasses import dataclass
+from pathlib import Path
+import recurring_ical_events 
 
 
 @dataclass
 class CalendarEvent:
     title: str
-    location: str
-    description: str
     start_time: datetime
-    end_time: datetime
+    end_time: datetime | None = None
+    location: str | None = None
+    description: str | None = None
+
+    @classmethod
+    def from_ical(cls, ical):
+        return cls(
+            title=str(ical["SUMMARY"]),
+            start_time=ical["DTSTART"].dt,
+            end_time=ical["DTEND"].dt if "DTEND" in ical else None,
+        )
 
     def __str__(self):
         return json.dumps(asdictify(self))
@@ -36,4 +47,16 @@ def fetch_calendar_events_from_khal(*args, **kwargs) -> List[CalendarEvent]:
 
     return [CalendarEvent(**i) for i in data]
 
-fetch_calendar_events = fetch_calendar_events_from_khal
+
+def fetch_calendar_events_from_vdir(vdir="/home/ischa/.local/share/caldav/"):
+    events = []
+
+    for ical_file in Path(vdir).glob("**/*.ics"):
+        with ical_file.open("rb") as f:
+            ical = Calendar.from_ical(f.read())
+            events.extend(recurring_ical_events.of(ical).at(date.today()))
+
+    return [CalendarEvent.from_ical(event) for event in events]
+
+
+fetch_calendar_events = fetch_calendar_events_from_vdir
