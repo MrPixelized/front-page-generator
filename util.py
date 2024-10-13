@@ -30,12 +30,16 @@ def json_from_url(url, **params):
     return json.loads(requests.get(req.url).content)
 
 
-def csv_from_subprocess(prog, *args, **kwargs):
+def run(prog, *args, **kwargs):
     named_args = [f"-{'-' if len(k) > 1 else ''}{k.replace('_', '-')}={v}"
                   for k, v in kwargs.items()]
     proc = subprocess.run([prog, *args, *named_args], stdout=subprocess.PIPE)
 
-    return list(csv.reader(StringIO(proc.stdout.decode("UTF-8"))))
+    return proc.stdout.decode("UTF-8")
+
+
+def csv_from_subprocess(prog, *args, **kwargs):
+    return list(csv.reader(StringIO(run(prog, *args, **kwargs))))
 
 
 def parse_html(html):

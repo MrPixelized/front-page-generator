@@ -2,5 +2,5 @@
 
 uv run main.py --locations "Almere Stad" --forecast-days 1 --rss-feeds "https://www.cbs.nl/nl-nl/rss-feeds/alle-nieuwsberichten" -H "X=EUR" "depth=3" "not:liabilities:conditional" > page/data.json
 
-typst compile page/main.typ font-page.pdf
+typst compile page/main.typ front-page.pdf
 echo "Output at front-page.pdf"

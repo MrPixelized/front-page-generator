@@ -3,6 +3,7 @@ from weather import WeatherForecast
 from finance import BalanceSheet
 from location import Location
 from news import fetch_articles
+from events import fetch_calendar_events
 import json
 from argparse import ArgumentParser
 
@@ -27,6 +28,7 @@ class FrontPage:
         }
         self.news = sum(map(list, zip(*map(fetch_articles, self.feeds))), [])
         self.balance_sheet = BalanceSheet.from_hledger(*self.hledger_args)
+        self.events = fetch_calendar_events()
 
     def to_md(self):
         return (
@@ -45,7 +47,8 @@ class FrontPage:
             "timestamp": self.refresh_time,
             "weather": {str(k): v for k, v in self.weather.items()},
             "news": self.news,
-            "balance_sheet": self.balance_sheet
+            "balance_sheet": self.balance_sheet,
+            "events": self.events,
        })
 
 

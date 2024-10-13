@@ -32,7 +32,7 @@
     #stack(dir: ttb, ..values, spacing: 4pt)
   ]
 
-  v(0.5em, weak: true)
+  v(0.65em, weak: true)
 }
 
 // Styling
@@ -44,13 +44,15 @@
 }
 
 #set text(8pt)
+#set par(leading: 0.5em, justify: true)
 #set grid(column-gutter: 8pt, row-gutter: 16pt)
+#set columns(gutter: 8pt)
 
 // Read data
 #let data = json("./data.json")
 
 // Title
-#{
+#let title = {
   set text(16pt)
   [Good morning, Ischa!]
   h(1fr)
@@ -58,35 +60,58 @@
   parse-date(data.timestamp).display("[weekday] [month repr:short] [day], [year]")
 }
 
+
 #let email = [
   = Email
 ]
 
 #let calendar = [
-  = Events
+  = Events today
+
+  #set par(justify: false)
+  #let colors = (yellow, blue, orange, green, red, purple)
+  #for event in data.events {
+    let start = parse-date(event.start_time)
+    let end = parse-date(event.end_time)
+    let c = colors.at(calc.rem(start.hour(), colors.len()))
+
+    rect(radius: 0.5em, stroke: 0pt, fill: c.lighten(80%), width: 100%)[
+      #event.title
+      #h(1fr)
+      // #sym.dot.c
+      #if start == end [
+        #start.display("[hour]:[minute]")
+      ] else [
+        #start.display("[hour]:[minute]") -- #end.display("[hour]:[minute]")
+      ]
+    ]
+    v(0.5em, weak: true)
+  }
 ]
 
 #let motd = [
   = MOTD
 
-  #lorem(40)
+  #lorem(50)
 ]
 
 #let news = [
   = News
   #let article-count = 12
+  #let cols = 3
   #let news = data.news.chunks(article-count).first()
   #let news = news.map(article => {
-    box[
-      #set par(justify: true)
-      == #text(8pt, article.title)
-      #article.summary.split("\n").chunks(1).first().join(" ")
-    ]
+      heading(level: 2, par(leading: 0.33em, justify: false, text(8pt, article.title)))
+      article.summary.split("\n").chunks(1).first().join(" ")
   })
 
-  #let cols = 3
-  #grid(columns: cols, ..news.chunks(int(article-count/cols)).map(c =>
-  c.join(v(1em, weak: true))))
+  #block(clip: true, inset: (bottom: -1em), outset: (bottom: -0.8em),
+    columns(cols, news.join({v(1em);v(1fr, weak: true)}))
+
+    // grid(columns: cols,
+      // ..news.chunks(int(article-count/cols)).map(c => c.join(v(1em, weak: true)))
+    // )
+  )
 ]
 
 #let finance = [
@@ -113,26 +138,30 @@
   #weather-display(data.weather.values().first().by_date.values().first())
 
   #if data.weather.len() > 1 or data.weather.values().first().by_date.len() > 1 {
-    grid(columns: data.weather.len(), ..data.weather.values().map(data => {
-      weather-display(data, graph: false, icon: false)
-    }))
+    grid(columns: data.weather.len(),
+      ..data.weather.values().map(
+        weather-display.with(graph: false, icon: false)
+      )
+    )
   }
 ]
 
-// #show: box
+#show: box
 
-#grid(columns: 1fr,
+#title
+
+#grid(columns: 1fr, rows: (auto, 1fr, auto),
   weather,
   grid(columns: (1fr, 4cm),
     news,
     grid(columns: 1,
+      calendar,
       finance,
-      todo
     ),
   ),
   grid(columns: 3,
     motd,
     email,
-    calendar
+    todo,
   ),
 )
