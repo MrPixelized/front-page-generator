@@ -1,6 +1,7 @@
 #import "@preview/cetz:0.2.2": canvas, draw, plot
 
 #let parse-date(iso-date) = {
+  let (iso-date, ..tzinfo) = iso-date.split("+")
   let (iso-date, ..rest) = iso-date.split(".")
   if "T" not in iso-date {
     let (year, month, day) = iso-date.split("-").map(int)
