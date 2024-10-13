@@ -136,7 +136,19 @@
 
 #let todo = [
   = To-do's
-  #v(4cm)
+  #for event in data.todo {
+    let due = parse-date(event.due)
+
+    rect(radius: 0.5em, stroke: 0pt, fill: blue.lighten(80%), width: 100%)[
+      #event.title
+      #h(1fr)
+      // #sym.dot.c
+      #if due != none [
+        #due.display("[hour]:[minute]")
+      ]
+    ]
+    v(0.5em, weak: true)
+  }
 ]
 
 #let weather = [
@@ -162,12 +174,12 @@
     news,
     grid(columns: 1,
       calendar,
+      todo,
       finance,
     ),
   ),
   grid(columns: 3,
     motd,
     email,
-    todo,
   ),
 )
