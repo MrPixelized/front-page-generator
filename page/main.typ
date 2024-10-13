@@ -8,8 +8,11 @@
   "USD": sym.dollar,
 ).at(name)
 
-#let censor(c) = context box(rect(height: measure(c).height, width:
-measure(c).width, inset: 0em, outset: (bottom: 1pt), fill: black.lighten(20%)))
+#let censor(c) = context box(rect(
+  height: measure(c).height, width: measure(c).width,
+  inset: 0em, outset: (bottom: 1pt), fill: black.lighten(20%)
+))
+#let censor(c) = c
 
 #let account-summary(data) = for (account, values) in data.pairs() {
   values = values.map(v => censor[
