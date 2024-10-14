@@ -92,6 +92,9 @@ def seriablize(d) -> dict:
     if isinstance(d, datetime) or isinstance(d, date):
         return d.isoformat()
 
+    if not hasattr(d, "__hash__"):
+        return str(d)
+
     return d
 
 

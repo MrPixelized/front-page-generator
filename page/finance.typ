@@ -48,11 +48,16 @@
 
 #let budget-summary(data) = {
   for (account, values) in data.pairs() {
-    values = values.used.zip(values.total).map(currency-amount).map(v =>
-    v.join("/"))
+    values = values.used.zip(values.total).map(currency-amount)
+
+    if account == "total" {
+      values = values.map(array.first)
+    } else {
+      values = values.map(v => v.join("/"))
+    }
     data.insert(account, values)
   }
-  let _ = data.remove("total")
+
   base-finance-summary(data)
 }
 

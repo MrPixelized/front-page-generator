@@ -1,6 +1,17 @@
 #!/bin/bash
 
-uv run main.py --locations "Almere Stad" --forecast-days 1 --rss-feeds "https://www.cbs.nl/nl-nl/rss-feeds/alle-nieuwsberichten" -H "X=EUR" "depth=3" "not:liabilities:conditional" > page/data.json
+# uv run main.py --locations "Almere Stad" --forecast-days 1 --rss-feeds "https://www.cbs.nl/nl-nl/rss-feeds/alle-nieuwsberichten" -H "X=EUR" "depth=3" "not:liabilities:conditional" > page/data.json
+uv run main.py \
+	--locations "Almere Stad" \
+	--forecast-days 1 \
+	--rss-feeds \
+		"https://www.cbs.nl/nl-nl/rss-feeds/alle-nieuwsberichten" \
+		"https://rss.nytimes.com/services/xml/rss/nyt/World.xml" \
+		"https://openrss.org/www.reuters.com/world" \
+	--hledger-args "X=EUR" "depth=3" "not:liabilities:conditional" \
+	--vdir "$HOME/.local/share/caldav" \
+> page/data.json
+
 
 typst compile page/main.typ front-page.pdf
 echo "Output at front-page.pdf"

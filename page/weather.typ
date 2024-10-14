@@ -137,10 +137,10 @@
   let sunrise = parse-date(data.aggregate.sunrise)
   let sunset = parse-date(data.aggregate.sunset)
 
-  // Extract timestamps from morning to night
+  // Extract timestamps from the start of the view to the end
   let timestamps = data.hourly.keys().filter(m => {
     let t = parse-date(m)
-    return t > morning-of(t) and t < night-of(t)
+    t > morning-of(t) and t < night-of(t)
   })
 
   // Create an icon and time for each, use them as ticks
@@ -162,93 +162,91 @@
   let min-temp = calc.min(..timestamps.map(t => data.hourly.at(t).temperature))
   let max-temp = calc.max(..timestamps.map(t => data.hourly.at(t).temperature))
 
-  box(width: 100%, {
-    canvas(length: 100%, {
-      // Astronomy
-      plot-clean(size: graph-size, y-min: 0, y-max: 1, name: "astro", {
-        let sunrise = sunrise.hour() + sunrise.minute() / 60
-        let sunset = sunset.hour() + sunset.minute() / 60
+  canvas(length: 100%, {
+    // Astronomy
+    plot-clean(size: graph-size, y-min: 0, y-max: 1, name: "astro", {
+      let sunrise = sunrise.hour() + sunrise.minute() / 60
+      let sunset = sunset.hour() + sunset.minute() / 60
 
-        let noon = (sunset + sunrise) / 2
+      let noon = (sunset + sunrise) / 2
 
-        plot.add(
-          style: (stroke: 0pt),
-          (
-            (calc.min(..timestamps.map(parse-date).map(t => t.hour())), 0),
-            (calc.max(..timestamps.map(parse-date).map(t => t.hour())), 0),
-          )
+      plot.add(
+        style: (stroke: 0pt),
+        (
+          (calc.min(..timestamps.map(parse-date).map(t => t.hour())), 0),
+          (calc.max(..timestamps.map(parse-date).map(t => t.hour())), 0),
         )
+      )
 
-        plot.add-anchor("sunrise", (sunrise, 0))
-        plot.add-anchor("sunset", (sunset, 0))
-        plot.add-anchor("noon", (noon, (sunset - sunrise) / 22))
-        plot.add-anchor("now-bottom", (10, 0))
-        plot.add-anchor("now-top", (10, 1))
-      })
-
-      draw.intersections("sun", {
-        draw.hobby("astro.sunrise", "astro.noon", "astro.sunset",
-          stroke: gray.lighten(33%),
-          // stroke: gradient.linear(red.darken(20%), orange, yellow, ..(blue.lighten(70%),)*4, dir: btt),
-        )
-        draw.hide(draw.line("astro.now-bottom", "astro.now-top", name: "now"))
-      })
-
-      for (t, anchor) in ((sunrise, "astro.sunrise"), (sunset, "astro.sunset")) {
-        draw.content(anchor, {
-          set text(6pt, gray.darken(33%))
-          v(2pt)
-          t.display("[hour]:[minute]")
-        }, anchor: "north")
-      }
-
-      // Precipitation
-      plot-clean(size: graph-size, y-min: 0, y-max: 120, {
-        let precipitation-style = (
-          stroke: blue.lighten(50%),
-          fill: blue.transparentize(85%),
-          // fill: hatching(),
-        )
-
-        plot.add(
-          line: "hvh",
-          hypograph: true,
-          style: precipitation-style,
-          timestamps.map(t =>
-            (parse-date(t).hour(), data.hourly.at(t).precipitation_probability)
-          )
-        )
-
-      })
-
-      // Temperature
-      plot-clean(size: graph-size, x-ticks: ticks, y-min: min-temp - 1, y-max: max-temp + 1,
-        name: "temp", {
-        let temperature-style = (
-          stroke: orange.mix(yellow).lighten(50%),
-          fill: yellow.transparentize(75%),
-        )
-
-        plot.add(
-          line: "spline",
-          style: temperature-style,
-          timestamps.map(t => (parse-date(t).hour(), data.hourly.at(t).temperature))
-        )
-
-        for t in timestamps {
-          plot.add-anchor(t, (parse-date(t).hour(), data.hourly.at(t).temperature))
-        }
-      })
-
-      for t in tick-timestamps {
-        draw.content((rel: (0, 0.02), to: "temp." + t),
-          text(8pt, gray, str(data.hourly.at(t).temperature))
-        )
-      }
-
-      // Decorative sun, on top
-      draw.content("sun.0", weather-icon("clear-sky-day", width: icon-width))
+      plot.add-anchor("sunrise", (sunrise, 0))
+      plot.add-anchor("sunset", (sunset, 0))
+      plot.add-anchor("noon", (noon, (sunset - sunrise) / 22))
+      plot.add-anchor("now-bottom", (10, 0))
+      plot.add-anchor("now-top", (10, 1))
     })
+
+    draw.intersections("sun", {
+      draw.hobby("astro.sunrise", "astro.noon", "astro.sunset",
+        stroke: gray.lighten(33%),
+        // stroke: gradient.linear(red.darken(20%), orange, yellow, ..(blue.lighten(70%),)*4, dir: btt),
+      )
+      draw.hide(draw.line("astro.now-bottom", "astro.now-top", name: "now"))
+    })
+
+    for (t, anchor) in ((sunrise, "astro.sunrise"), (sunset, "astro.sunset")) {
+      draw.content(anchor, {
+        set text(6pt, gray.darken(33%))
+        v(2pt)
+        t.display("[hour]:[minute]")
+      }, anchor: "north")
+    }
+
+    // Precipitation
+    plot-clean(size: graph-size, y-min: 0, y-max: 120, {
+      let precipitation-style = (
+        stroke: blue.lighten(50%),
+        fill: blue.transparentize(85%),
+        // fill: hatching(),
+      )
+
+      plot.add(
+        line: "hvh",
+        hypograph: true,
+        style: precipitation-style,
+        timestamps.map(t =>
+          (parse-date(t).hour(), data.hourly.at(t).precipitation_probability)
+        )
+      )
+
+    })
+
+    // Decorative sun, in front of rain but behind temperature
+    draw.content("sun.0", weather-icon("clear-sky-day", width: icon-width))
+
+    // Temperature
+    plot-clean(size: graph-size, x-ticks: ticks, y-min: min-temp - 1, y-max: max-temp + 1,
+      name: "temp", {
+      let temperature-style = (
+        stroke: orange.mix(yellow).lighten(50%),
+        fill: yellow.transparentize(75%),
+      )
+
+      plot.add(
+        line: "spline",
+        style: temperature-style,
+        timestamps.map(t => (parse-date(t).hour(), data.hourly.at(t).temperature))
+      )
+
+      for t in timestamps {
+        plot.add-anchor(t, (parse-date(t).hour(), data.hourly.at(t).temperature))
+      }
+    })
+
+    for t in tick-timestamps {
+      draw.content((rel: (0, 0.02), to: "temp." + t),
+        text(8pt, gray, str(data.hourly.at(t).temperature))
+      )
+    }
   })
 }
 

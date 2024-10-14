@@ -5,6 +5,7 @@ from location import Location
 from news import fetch_articles
 from events import fetch_calendar_events
 from todo import fetch_todo
+from quote import fetch_quote
 import json
 from argparse import ArgumentParser
 
@@ -30,6 +31,7 @@ class FrontPage:
         self.news = sum(map(list, zip(*map(fetch_articles, self.feeds))), [])
         self.balance_sheet = BalanceSheet.from_hledger(*self.hledger_args)
         self.budget_sheet = BudgetSheet.from_hledger(*self.hledger_args)
+        self.quote = fetch_quote()
 
         if self.vdir is None:
             self.events = []
@@ -61,6 +63,7 @@ class FrontPage:
             },
             "events": self.events,
             "todo": self.todo,
+            "quote": self.quote,
        })
 
 

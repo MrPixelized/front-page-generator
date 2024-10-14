@@ -11,11 +11,19 @@
   line(length: 100%, stroke: 0.5pt)
   v(0.5em, weak: true)
 }
+#show heading.where(level: 2): set par(justify: false)
+#show heading.where(level: 2): it => {
+  it
+  v(0.5em, weak: true)
+}
 
+#set page(margin: 2cm)
 #set text(8pt)
+#show heading.where(level: 2): set par(leading: 0.33em)
 #set par(leading: 0.5em, justify: true)
 #set grid(column-gutter: 8pt, row-gutter: 16pt)
 #set columns(gutter: 8pt)
+#set quote(block: true)
 
 // Read data
 #let data = json("./data.json")
@@ -34,8 +42,20 @@
   = Email
 ]
 
+#let transit = [
+  = Transit
+]
+
+#let astronomy = [
+  = Astronomy
+]
+
 #let calendar = [
   = Events today
+
+  #if data.events.len() == 0 [
+    I guess today's just chillin'.
+  ]
 
   #set par(justify: false)
   #let colors = (yellow, blue, orange, green, red, purple)
@@ -64,24 +84,46 @@
   #lorem(50)
 ]
 
-#let news = [
-  = News
-  #let article-count = 9
-  #let cols = 3
-  #let news = data.news.chunks(article-count).first()
-  #let news = news.map(article => {
-      heading(level: 2, par(leading: 0.33em, justify: false, text(8pt, article.title)))
-      article.summary.split("\n").chunks(1).first().join(" ")
-  })
-
-  #block(clip: true, inset: (bottom: 0.2em),
-    // columns(cols, news.join({v(1em);v(1fr, weak: true)}))
-
-    grid(columns: cols,
-      ..news.chunks(int(article-count/cols)).map(c => c.join(v(1em, weak: true)))
-    )
-  )
+#let quote = [
+  #set par(justify: false)
+  // = QOTD
+  // #v(8pt, weak: true)
+  #quote(attribution: data.quote.author, data.quote.text)
 ]
+
+#let news(articles: none, cols: 3) = context layout(size => [
+  #let max = if articles != none { articles } else { data.news.len() }
+  #let min = if articles != none { articles } else { cols }
+
+  #let news-columns(a) = {
+    let news = data.news.chunks(a).first()
+    news = news.map(article => [
+      #show heading.where(level: 2): set text(text.size)
+      // #strong(article.title)
+      // #h(0.65em)
+      == #article.title
+      #shorten-text(article.summary)
+    ])
+
+    block(width: size.width,
+      grid(columns: cols,
+        ..divide-in-chunks(news, cols).map(col => col.join({
+          // strong(sym.dot.op)
+          v(1em)
+          v(1fr, weak: true)
+        }))
+      )
+    )
+  }
+
+  = News
+  #for articles in range(min, max, step: 1) {
+    if measure(news-columns(articles)).height > size.height - 8pt {
+      news-columns(articles - 1)
+      break
+    }
+  }
+])
 
 #let finance = [
   = Finance
@@ -136,22 +178,24 @@
   }
 ]
 
-#show: box
 
-#title
+#show: box
+// #title
 
 #grid(columns: 1fr, rows: (auto, 1fr, auto),
   weather,
-  grid(columns: (1fr, 4cm),
-    news,
-    grid(columns: 1,
+  grid(columns: (3fr, 1fr),
+    news(),
+    grid(columns: 1, row-gutter: (16pt, 16pt, 1fr),
       calendar,
       todo,
       finance,
+      quote,
     ),
   ),
-  grid(columns: 3,
-    motd,
-    email,
-  ),
+  // grid(columns: (2fr, 3fr, 2fr),
+    // motd,
+    // astronomy,
+    // transit,
+  // ),
 )
