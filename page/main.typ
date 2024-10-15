@@ -65,7 +65,7 @@
     let c = colors.at(calc.rem(start.hour(), colors.len()))
 
     rect(radius: 0.5em, stroke: 0pt, fill: c.lighten(80%), width: 100%)[
-      #event.title
+      #censor(event.title)
       #h(1fr)
       // #sym.dot.c
       #if start == end [
@@ -156,7 +156,7 @@
       #if due != none [
         #due.display("[hour]:[minute]")
       ]
-      #event.title
+      #censor(event.title)
       #h(1fr)
       #box(rect(radius: 1pt, inset: 2.5pt, outset: 0em, stroke: 0.5pt, fill:
       white)[]) 

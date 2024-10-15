@@ -1,5 +1,6 @@
 #import "@preview/cetz:0.2.2": canvas, draw, plot
 #import "./dates.typ": *
+#import "./util.typ": *
 
 #let capitalize(s) = upper(s.slice(0, 1)) + s.slice(1)
 
@@ -86,7 +87,7 @@
       let country = location.name.split(",").last().trim()
       h(1fr)
       // text(8pt)[#city, #country]
-      text(8pt, city)
+      text(8pt, censor(city))
     }
   })
 
